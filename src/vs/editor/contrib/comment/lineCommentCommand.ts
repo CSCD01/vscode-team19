@@ -14,6 +14,7 @@ import { IIdentifiedSingleEditOperation, ITextModel } from 'vs/editor/common/mod
 import { LanguageConfigurationRegistry } from 'vs/editor/common/modes/languageConfigurationRegistry';
 import { BlockCommentCommand } from 'vs/editor/contrib/comment/blockCommentCommand';
 import { Constants } from 'vs/base/common/uint';
+import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 
 export interface IInsertionPoint {
 	ignore: boolean;
@@ -57,7 +58,8 @@ export class LineCommentCommand implements ICommand {
 	private _deltaColumn: number;
 	private _moveEndPositionDown: boolean;
 
-	constructor(selection: Selection, tabSize: number, type: Type, insertSpace: boolean) {
+	constructor(@IConfigurationService private readonly configurationService: IConfigurationService, selection: Selection, tabSize: number, type: Type, insertSpace: boolean) {
+	//constructor(selection: Selection, tabSize: number, type: Type, insertSpace: boolean) {
 		this._selection = selection;
 		this._tabSize = tabSize;
 		this._type = type;
@@ -100,9 +102,11 @@ export class LineCommentCommand implements ICommand {
 	 * Analyze lines and decide which lines are relevant and what the toggle should do.
 	 * Also, build up several offsets and lengths useful in the generation of editor operations.
 	 */
-	public static _analyzeLines(type: Type, insertSpace: boolean, model: ISimpleModel, lines: ILinePreflightData[], startLineNumber: number): IPreflightData {
+	public static _analyzeLines(type: Type, insertSpace: boolean, model: ISimpleModel, lines: ILinePreflightData[], startLineNumber: number, something: boolean): IPreflightData {
 		let onlyWhitespaceLines = true;
 
+
+		console.log("testesttest");
 		let shouldRemoveComments: boolean;
 		if (type === Type.Toggle) {
 			shouldRemoveComments = true;
@@ -122,11 +126,11 @@ export class LineCommentCommand implements ICommand {
 			if (lineContentStartOffset === -1) {
 				// Empty or whitespace only line
 				if (type === Type.Toggle) {
-					lineData.ignore = true;
+					lineData.ignore = !something;
 				} else if (type === Type.ForceAdd) {
-					lineData.ignore = true;
+					lineData.ignore = !something;
 				} else {
-					lineData.ignore = true;
+					lineData.ignore = !something;
 				}
 				lineData.commentStrOffset = lineContent.length;
 				continue;
@@ -176,7 +180,7 @@ export class LineCommentCommand implements ICommand {
 	/**
 	 * Analyze all lines and decide exactly what to do => not supported | insert line comments | remove line comments
 	 */
-	public static _gatherPreflightData(type: Type, insertSpace: boolean, model: ITextModel, startLineNumber: number, endLineNumber: number): IPreflightData {
+	public static _gatherPreflightData(type: Type, insertSpace: boolean, model: ITextModel, startLineNumber: number, endLineNumber: number, something: boolean): IPreflightData {
 		const lines = LineCommentCommand._gatherPreflightCommentStrings(model, startLineNumber, endLineNumber);
 		if (lines === null) {
 			return {
@@ -184,7 +188,7 @@ export class LineCommentCommand implements ICommand {
 			};
 		}
 
-		return LineCommentCommand._analyzeLines(type, insertSpace, model, lines, startLineNumber);
+		return LineCommentCommand._analyzeLines(type, insertSpace, model, lines, startLineNumber, something);
 	}
 
 	/**
@@ -326,7 +330,9 @@ export class LineCommentCommand implements ICommand {
 			s = s.setEndPosition(s.endLineNumber - 1, model.getLineMaxColumn(s.endLineNumber - 1));
 		}
 
-		const data = LineCommentCommand._gatherPreflightData(this._type, this._insertSpace, model, s.startLineNumber, s.endLineNumber);
+		console.log('begin');
+		const data = LineCommentCommand._gatherPreflightData(this._type, this._insertSpace, model, s.startLineNumber, s.endLineNumber, this.configurationService.getValue<boolean>('comments.fuck'));
+		console.log('fuck', data);
 		if (data.supported) {
 			return this._executeLineComments(model, builder, data, s);
 		}
