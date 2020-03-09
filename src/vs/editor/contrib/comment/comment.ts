@@ -14,6 +14,7 @@ import { LineCommentCommand, Type } from 'vs/editor/contrib/comment/lineCommentC
 import { MenuId } from 'vs/platform/actions/common/actions';
 import { EditorOption } from 'vs/editor/common/config/editorOptions';
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
+import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 
 abstract class CommentLineAction extends EditorAction {
 
@@ -36,7 +37,7 @@ abstract class CommentLineAction extends EditorAction {
 		const commentsOptions = editor.getOption(EditorOption.comments);
 
 		for (const selection of selections) {
-			commands.push(new LineCommentCommand(selection, modelOptions.tabSize, this._type, commentsOptions.insertSpace));
+			commands.push(new LineCommentCommand(accessor.get(IConfigurationService), selection, modelOptions.tabSize, this._type, commentsOptions.insertSpace));
 		}
 
 		editor.pushUndoStop();
