@@ -4,13 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'vs/css!./media/editordroptarget';
-import { LocalSelectionTransfer, DraggedEditorIdentifier, ResourcesDropHandler, DraggedEditorGroupIdentifier, DragAndDropObserver, containsDragType } from 'vs/workbench/browser/dnd';
+import { LocalSelectionTransfer, DraggedEditorIdentifier, ResourcesDropHandler, DraggedEditorGroupIdentifier, DragAndDropObserver, containsDragType, DraggedMultiEditorIdentifier } from 'vs/workbench/browser/dnd';
 import { addDisposableListener, EventType, EventHelper, isAncestor, toggleClass, addClass, removeClass } from 'vs/base/browser/dom';
 import { IEditorGroupsAccessor, EDITOR_TITLE_HEIGHT, IEditorGroupView, getActiveTextEditorOptions } from 'vs/workbench/browser/parts/editor/editor';
 import { EDITOR_DRAG_AND_DROP_BACKGROUND } from 'vs/workbench/common/theme';
 import { IThemeService, Themable } from 'vs/platform/theme/common/themeService';
 import { activeContrastBorder } from 'vs/platform/theme/common/colorRegistry';
-import { IEditorIdentifier, EditorInput, EditorOptions } from 'vs/workbench/common/editor';
+import { IEditorIdentifier, EditorInput, EditorOptions, IMultiEditorIdentifier } from 'vs/workbench/common/editor';
 import { isMacintosh, isWeb } from 'vs/base/common/platform';
 import { GroupDirection, MergeGroupMode } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { toDisposable } from 'vs/base/common/lifecycle';
@@ -41,6 +41,7 @@ class DropOverlay extends Themable {
 	private cleanupOverlayScheduler: RunOnceScheduler;
 
 	private readonly editorTransfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
+	private readonly multiEditorTransfer = LocalSelectionTransfer.getInstance<DraggedMultiEditorIdentifier>();
 	private readonly groupTransfer = LocalSelectionTransfer.getInstance<DraggedEditorGroupIdentifier>();
 
 	constructor(
@@ -109,10 +110,11 @@ class DropOverlay extends Themable {
 			onDragOver: e => {
 				const isDraggingGroup = this.groupTransfer.hasData(DraggedEditorGroupIdentifier.prototype);
 				const isDraggingEditor = this.editorTransfer.hasData(DraggedEditorIdentifier.prototype);
+				const isDraggingMultiEditor = this.multiEditorTransfer.hasData(DraggedMultiEditorIdentifier.prototype);
 
 				// Update the dropEffect to "copy" if there is no local data to be dragged because
 				// in that case we can only copy the data into and not move it from its source
-				if (!isDraggingEditor && !isDraggingGroup && e.dataTransfer) {
+				if (!isDraggingEditor && !isDraggingGroup && !isDraggingMultiEditor && e.dataTransfer) {
 					e.dataTransfer.dropEffect = 'copy';
 				}
 
@@ -124,6 +126,11 @@ class DropOverlay extends Themable {
 					const data = this.editorTransfer.getData(DraggedEditorIdentifier.prototype);
 					if (Array.isArray(data)) {
 						isCopy = this.isCopyOperation(e, data[0].identifier);
+					}
+				} else if (isDraggingMultiEditor) {
+					const data = this.multiEditorTransfer.getData(DraggedMultiEditorIdentifier.prototype);
+					if (Array.isArray(data)) {
+						isCopy = this.isCopyOperation(e, undefined, data[0].identifier);
 					}
 				}
 
@@ -189,6 +196,13 @@ class DropOverlay extends Themable {
 		// Check for editor transfer
 		else if (this.editorTransfer.hasData(DraggedEditorIdentifier.prototype)) {
 			const data = this.editorTransfer.getData(DraggedEditorIdentifier.prototype);
+			if (Array.isArray(data)) {
+				return this.accessor.getGroup(data[0].identifier.groupId);
+			}
+		}
+		// Check for multi editor transfer
+		else if (this.multiEditorTransfer.hasData(DraggedMultiEditorIdentifier.prototype)) {
+			const data = this.multiEditorTransfer.getData(DraggedMultiEditorIdentifier.prototype);
 			if (Array.isArray(data)) {
 				return this.accessor.getGroup(data[0].identifier.groupId);
 			}
@@ -283,63 +297,107 @@ class DropOverlay extends Themable {
 				this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
 			}
 		}
+		// check for multiple editor transfer
+		else if (this.multiEditorTransfer.hasData(DraggedMultiEditorIdentifier.prototype)) {
+			const data = this.multiEditorTransfer.getData(DraggedMultiEditorIdentifier.prototype);
+			if (Array.isArray(data)) {
+				const draggedEditors = data[0].identifier;
+				const targetGroup = ensureTargetGroup();
 
-		// Web: check for file transfer
-		else if (isWeb && containsDragType(event, DataTransfers.FILES)) {
-			let targetGroup: IEditorGroupView | undefined = undefined;
+				// Return if the drop is a no-op
+				const sourceGroup = this.accessor.getGroup(draggedEditors.groupId);
+				if (sourceGroup) {
+					if (sourceGroup === targetGroup) {
+						return;
+					}
 
-			const files = event.dataTransfer?.files;
-			if (files) {
-				for (let i = 0; i < files.length; i++) {
-					const file = files.item(i);
-					if (file) {
-						const reader = new FileReader();
-						reader.readAsArrayBuffer(file);
-						reader.onload = async event => {
-							const name = file.name;
-							if (typeof name === 'string' && event.target?.result instanceof ArrayBuffer) {
+					for (let editor of draggedEditors.editors) {
+						// Open in target group
+						const options = getActiveTextEditorOptions(sourceGroup, editor, EditorOptions.create({ pinned: true }));
+						targetGroup.openEditor(editor, options);
+					}
 
-								// Try to come up with a good file path for the untitled
-								// editor by asking the file dialog service for the default
-								let proposedFilePath: URI | undefined = undefined;
-								const defaultFilePath = this.fileDialogService.defaultFilePath();
-								if (defaultFilePath) {
-									proposedFilePath = joinPath(defaultFilePath, name);
+
+					// Ensure target has focus
+					targetGroup.focus();
+
+					// Close in source group unless we copy
+					const copyEditor = this.isCopyOperation(event, undefined, draggedEditors);
+					if (!copyEditor) {
+						for (let editor of draggedEditors.editors) {
+							sourceGroup.closeEditor(editor);
+						}
+
+					}
+				}
+
+				this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
+			}
+			// Web: check for file transfer
+			else if (isWeb && containsDragType(event, DataTransfers.FILES)) {
+				let targetGroup: IEditorGroupView | undefined = undefined;
+
+				const files = event.dataTransfer?.files;
+				if (files) {
+					for (let i = 0; i < files.length; i++) {
+						const file = files.item(i);
+						if (file) {
+							const reader = new FileReader();
+							reader.readAsArrayBuffer(file);
+							reader.onload = async event => {
+								const name = file.name;
+								if (typeof name === 'string' && event.target?.result instanceof ArrayBuffer) {
+
+									// Try to come up with a good file path for the untitled
+									// editor by asking the file dialog service for the default
+									let proposedFilePath: URI | undefined = undefined;
+									const defaultFilePath = this.fileDialogService.defaultFilePath();
+									if (defaultFilePath) {
+										proposedFilePath = joinPath(defaultFilePath, name);
+									}
+
+									// Open as untitled file with the provided contents
+									const untitledEditor = this.editorService.createEditorInput({
+										resource: proposedFilePath,
+										forceUntitled: true,
+										contents: VSBuffer.wrap(new Uint8Array(event.target.result)).toString()
+									});
+
+									if (!targetGroup) {
+										targetGroup = ensureTargetGroup();
+									}
+
+									await targetGroup.openEditor(untitledEditor);
 								}
-
-								// Open as untitled file with the provided contents
-								const untitledEditor = this.editorService.createEditorInput({
-									resource: proposedFilePath,
-									forceUntitled: true,
-									contents: VSBuffer.wrap(new Uint8Array(event.target.result)).toString()
-								});
-
-								if (!targetGroup) {
-									targetGroup = ensureTargetGroup();
-								}
-
-								await targetGroup.openEditor(untitledEditor);
-							}
-						};
+							};
+						}
 					}
 				}
 			}
-		}
 
-		// Check for URI transfer
-		else {
-			const dropHandler = this.instantiationService.createInstance(ResourcesDropHandler, { allowWorkspaceOpen: true /* open workspace instead of file if dropped */ });
-			dropHandler.handleDrop(event, () => ensureTargetGroup(), targetGroup => {
-				if (targetGroup) {
-					targetGroup.focus();
-				}
-			});
+			// Check for URI transfer
+			else {
+				const dropHandler = this.instantiationService.createInstance(ResourcesDropHandler, { allowWorkspaceOpen: true /* open workspace instead of file if dropped */ });
+				dropHandler.handleDrop(event, () => ensureTargetGroup(), targetGroup => {
+					if (targetGroup) {
+						targetGroup.focus();
+					}
+				});
+			}
 		}
 	}
 
-	private isCopyOperation(e: DragEvent, draggedEditor?: IEditorIdentifier): boolean {
+	private isCopyOperation(e: DragEvent, draggedEditor?: IEditorIdentifier, draggedEditors?: IMultiEditorIdentifier): boolean {
 		if (draggedEditor?.editor instanceof EditorInput && !draggedEditor.editor.supportsSplitEditor()) {
 			return false;
+		}
+
+		if (draggedEditors?.editors) {
+			for (let editor of draggedEditors.editors) {
+				if (editor instanceof EditorInput && !editor.supportsSplitEditor()) {
+					return false;
+				}
+			}
 		}
 
 		return (e.ctrlKey && !isMacintosh) || (e.altKey && isMacintosh);
@@ -521,6 +579,7 @@ export class EditorDropTarget extends Themable {
 	private counter = 0;
 
 	private readonly editorTransfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
+	private readonly multiEditorTransfer = LocalSelectionTransfer.getInstance<DraggedMultiEditorIdentifier>();
 	private readonly groupTransfer = LocalSelectionTransfer.getInstance<DraggedEditorGroupIdentifier>();
 
 	constructor(
@@ -556,6 +615,7 @@ export class EditorDropTarget extends Themable {
 		if (
 			!this.editorTransfer.hasData(DraggedEditorIdentifier.prototype) &&
 			!this.groupTransfer.hasData(DraggedEditorGroupIdentifier.prototype) &&
+			!this.multiEditorTransfer.hasData(DraggedMultiEditorIdentifier.prototype) &&
 			event.dataTransfer && !event.dataTransfer.types.length // see https://github.com/Microsoft/vscode/issues/25789
 		) {
 			event.dataTransfer.dropEffect = 'none';

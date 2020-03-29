@@ -1246,6 +1246,11 @@ export interface IEditorIdentifier {
 	editor: IEditorInput;
 }
 
+export interface IMultiEditorIdentifier {
+	groupId: GroupIdentifier;
+	editors: IEditorInput[];
+}
+
 /**
  * The editor commands context is used for editor commands (e.g. in the editor title)
  * and we must ensure that the context is serializable because it potentially travels
