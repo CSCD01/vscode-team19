@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'vs/css!./media/tabstitlecontrol';
+import { applyDragImage } from 'vs/base/browser/dnd';
 import { isMacintosh, isWindows } from 'vs/base/common/platform';
 import { shorten } from 'vs/base/common/labels';
 import { toResource, GroupIdentifier, IEditorInput, Verbosity, EditorCommandsContextActionRunner, IEditorPartOptions, SideBySideEditor } from 'vs/workbench/common/editor';
@@ -25,9 +26,9 @@ import { ScrollableElement } from 'vs/base/browser/ui/scrollbar/scrollableElemen
 import { ScrollbarVisibility } from 'vs/base/common/scrollable';
 import { getOrSet } from 'vs/base/common/map';
 import { IThemeService, registerThemingParticipant, IColorTheme, ICssStyleCollector, HIGH_CONTRAST } from 'vs/platform/theme/common/themeService';
-import { TAB_INACTIVE_BACKGROUND, TAB_ACTIVE_BACKGROUND, TAB_ACTIVE_FOREGROUND, TAB_INACTIVE_FOREGROUND, TAB_BORDER, EDITOR_DRAG_AND_DROP_BACKGROUND, TAB_UNFOCUSED_ACTIVE_FOREGROUND, TAB_UNFOCUSED_INACTIVE_FOREGROUND, TAB_UNFOCUSED_ACTIVE_BACKGROUND, TAB_UNFOCUSED_ACTIVE_BORDER, TAB_ACTIVE_BORDER, TAB_HOVER_BACKGROUND, TAB_HOVER_BORDER, TAB_UNFOCUSED_HOVER_BACKGROUND, TAB_UNFOCUSED_HOVER_BORDER, EDITOR_GROUP_HEADER_TABS_BACKGROUND, WORKBENCH_BACKGROUND, TAB_ACTIVE_BORDER_TOP, TAB_UNFOCUSED_ACTIVE_BORDER_TOP, TAB_ACTIVE_MODIFIED_BORDER, TAB_INACTIVE_MODIFIED_BORDER, TAB_UNFOCUSED_ACTIVE_MODIFIED_BORDER, TAB_UNFOCUSED_INACTIVE_MODIFIED_BORDER } from 'vs/workbench/common/theme';
+import { TAB_INACTIVE_BACKGROUND, TAB_ACTIVE_BACKGROUND, TAB_ACTIVE_FOREGROUND, TAB_INACTIVE_FOREGROUND, TAB_BORDER, EDITOR_DRAG_AND_DROP_BACKGROUND, TAB_UNFOCUSED_ACTIVE_FOREGROUND, TAB_UNFOCUSED_INACTIVE_FOREGROUND, TAB_UNFOCUSED_ACTIVE_BACKGROUND, TAB_UNFOCUSED_ACTIVE_BORDER, TAB_ACTIVE_BORDER, TAB_HOVER_BACKGROUND, TAB_HOVER_BORDER, TAB_UNFOCUSED_HOVER_BACKGROUND, TAB_UNFOCUSED_HOVER_BORDER, EDITOR_GROUP_HEADER_TABS_BACKGROUND, WORKBENCH_BACKGROUND, TAB_ACTIVE_BORDER_TOP, TAB_UNFOCUSED_ACTIVE_BORDER_TOP, TAB_ACTIVE_MODIFIED_BORDER, TAB_INACTIVE_MODIFIED_BORDER, TAB_UNFOCUSED_ACTIVE_MODIFIED_BORDER, TAB_UNFOCUSED_INACTIVE_MODIFIED_BORDER, TAB_ACTIVE_SELECTED_BACKGROUND, TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND, TAB_INACTIVE_SELECTED_BACKGROUND } from 'vs/workbench/common/theme';
 import { activeContrastBorder, contrastBorder, editorBackground, breadcrumbsBackground } from 'vs/platform/theme/common/colorRegistry';
-import { ResourcesDropHandler, fillResourceDataTransfers, DraggedEditorIdentifier, DraggedEditorGroupIdentifier, DragAndDropObserver } from 'vs/workbench/browser/dnd';
+import { ResourcesDropHandler, fillResourceDataTransfers, DraggedEditorIdentifier, DraggedEditorGroupIdentifier, DragAndDropObserver, DraggedMultiEditorIdentifier } from 'vs/workbench/browser/dnd';
 import { Color } from 'vs/base/common/color';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
@@ -66,6 +67,7 @@ export class TabsTitleControl extends TitleControl {
 	private tabResourceLabels: ResourceLabels;
 	private tabLabels: IEditorInputLabel[] = [];
 	private tabDisposables: IDisposable[] = [];
+	private selectedTabElements: Map<number, HTMLElement> = new Map<number, HTMLElement>();
 
 	private dimension: Dimension | undefined;
 	private readonly layoutScheduled = this._register(new MutableDisposable());
@@ -259,6 +261,22 @@ export class TabsTitleControl extends TitleControl {
 					}
 				}
 
+				if (this.multiEditorTransfer.hasData(DraggedMultiEditorIdentifier.prototype)) {
+					isLocalDragAndDrop = true;
+
+					const data = this.multiEditorTransfer.getData(DraggedMultiEditorIdentifier.prototype);
+					if (Array.isArray(data)) {
+						const localDraggedEditors = data[0].identifier;
+						for (let draggedEditor of localDraggedEditors.editors) {
+							if (this.group.id === localDraggedEditors.groupId && this.group.getIndexOfEditor(draggedEditor) === this.group.count - 1) {
+								if (e.dataTransfer) {
+									e.dataTransfer.dropEffect = 'none';
+								}
+							}
+						}
+					}
+				}
+
 				// Update the dropEffect to "copy" if there is no local data to be dragged because
 				// in that case we can only copy the data into and not move it from its source
 				if (!isLocalDragAndDrop) {
@@ -370,7 +388,6 @@ export class TabsTitleControl extends TitleControl {
 	}
 
 	moveEditor(editor: IEditorInput, fromIndex: number, targetIndex: number): void {
-
 		// Swap the editor label
 		const editorLabel = this.tabLabels[fromIndex];
 		this.tabLabels.splice(fromIndex, 1);
@@ -393,7 +410,7 @@ export class TabsTitleControl extends TitleControl {
 
 		// Activity has an impact on each tab
 		this.forEachTab((editor, index, tabContainer, tabLabelWidget, tabLabel) => {
-			this.redrawEditorActiveAndDirty(isGroupActive, editor, tabContainer, tabLabelWidget);
+			this.redrawEditorActiveSelectedAndDirty(isGroupActive, editor, tabContainer, tabLabelWidget, index);
 		});
 
 		// Activity has an impact on the toolbar, so we need to update and layout
@@ -428,7 +445,7 @@ export class TabsTitleControl extends TitleControl {
 	}
 
 	updateEditorDirty(editor: IEditorInput): void {
-		this.withTab(editor, (editor, index, tabContainer, tabLabelWidget) => this.redrawEditorActiveAndDirty(this.accessor.activeGroup === this.group, editor, tabContainer, tabLabelWidget));
+		this.withTab(editor, (editor, index, tabContainer, tabLabelWidget) => this.redrawEditorActiveSelectedAndDirty(this.accessor.activeGroup === this.group, editor, tabContainer, tabLabelWidget, index));
 	}
 
 	updateOptions(oldOptions: IEditorPartOptions, newOptions: IEditorPartOptions): void {
@@ -516,6 +533,10 @@ export class TabsTitleControl extends TitleControl {
 
 		this.tabDisposables.push(combinedDisposable(eventsDisposable, tabActionBar, tabActionRunner, editorLabel));
 
+		// clears multi select tabs
+		this.selectedTabElements.clear();
+		this.redraw();
+
 		return tabContainer;
 	}
 
@@ -541,17 +562,53 @@ export class TabsTitleControl extends TitleControl {
 			const input = this.group.getEditorByIndex(index);
 			if (input) {
 				this.group.openEditor(input);
+
+			}
+
+			// Select multiple tabs
+			if (e.button === 0 && e.ctrlKey) {
+				if (this.selectedTabElements.has(index)) {
+					this.selectedTabElements.delete(index);
+				} else {
+					this.selectedTabElements.set(index, tab);
+					//console.log(`Added index: ${index}`);
+				}
+				this.redraw();
 			}
 
 			return undefined;
 		};
 
+		// clears the map for multiple tab support on mouse up
+		disposables.add(addDisposableListener(tab, EventType.MOUSE_UP, (e: MouseEvent) => {
+			if (!e.ctrlKey && e.button === 0) {
+				this.selectedTabElements.clear();
+				this.redraw();
+			}
+		}));
+
 		const showContextMenu = (e: Event) => {
 			EventHelper.stop(e);
+			if (this.selectedTabElements.size <= 1) {
+				const input = this.group.getEditorByIndex(index);
+				if (input) {
+					this.onContextMenu(input, e, tab);
+				}
+			} else {
+				const keys: number[] = Array.from(this.selectedTabElements.keys());
+				const sortedKeys = keys.sort((n1, n2) => n1 - n2);
+				let inputs: IEditorInput[] = [];
 
-			const input = this.group.getEditorByIndex(index);
-			if (input) {
-				this.onContextMenu(input, e, tab);
+				for (let i of sortedKeys) {
+					const input = this.group.getEditorByIndex(i);
+					if (input) {
+						inputs.push(input);
+					} else {
+						return;
+					}
+				}
+
+				this.onMultiContextMenu(inputs, e, tab);
 			}
 		};
 
@@ -658,21 +715,80 @@ export class TabsTitleControl extends TitleControl {
 		disposables.add(addDisposableListener(tab, EventType.CONTEXT_MENU, (e: Event) => {
 			EventHelper.stop(e, true);
 
-			const input = this.group.getEditorByIndex(index);
-			if (input) {
-				this.onContextMenu(input, e, tab);
+			if (this.selectedTabElements.size <= 1 && !this.selectedTabElements.has(index)) {
+				const input = this.group.getEditorByIndex(index);
+				if (input) {
+					this.onContextMenu(input, e, tab);
+				}
+			} else {
+				const keys: number[] = Array.from(this.selectedTabElements.keys());
+				const sortedKeys = keys.sort((n1, n2) => n1 - n2);
+				let inputs: IEditorInput[] = [];
+
+				for (let i of sortedKeys) {
+					const input = this.group.getEditorByIndex(i);
+					if (input) {
+						inputs.push(input);
+					} else {
+						return;
+					}
+				}
+
+				this.onMultiContextMenu(inputs, e, tab);
+				// clear the selected
+				this.selectedTabElements.clear();
 			}
 		}, true /* use capture to fix https://github.com/Microsoft/vscode/issues/19145 */));
 
+		const multipleTabDragSupport = (e: DragEvent): void => {
+			const editors: IEditorInput[] = [];
+			const keys: number[] = Array.from(this.selectedTabElements.keys());
+			const sortedKeys = keys.sort((n1, n2) => n1 - n2);
+			sortedKeys.forEach((element, currIndex) => {
+				const editor = this.group.getEditorByIndex(currIndex);
+				if (!editor) {
+					return;
+				}
+				editors.push(editor);
+			});
+
+			this.multiEditorTransfer.setData([new DraggedMultiEditorIdentifier({ editors, groupId: this.group.id })], DraggedMultiEditorIdentifier.prototype);
+			if (e.dataTransfer) {
+				e.dataTransfer.effectAllowed = 'copyMove';
+			}
+
+			// const resource = toResource(editors, { supportSideBySide: SideBySideEditor.MASTER });
+			// if (resource) {
+			// 	this.instantiationService.invokeFunction(fillResourceDataTransfers, [resource], e);
+			// }
+
+			// // Fixes https://github.com/Microsoft/vscode/issues/18733
+			// addClass(tab, 'dragged');
+			// scheduleAtNextAnimationFrame(() => removeClass(tab, 'dragged'));
+
+			// Drag Image, same as drag group in titlecontrol
+			if (this.group.activeEditor) {
+				let label = this.group.activeEditor.getName();
+				if (this.accessor.partOptions.showTabs && this.group.count > 1) {
+					label = localize('draggedEditorGroup', "{0} (+{1})", label, this.selectedTabElements.size - 1);
+				}
+				applyDragImage(e, label, 'monaco-editor-group-drag-image');
+			}
+		};
+
 		// Drag support
 		disposables.add(addDisposableListener(tab, EventType.DRAG_START, (e: DragEvent) => {
+			if (this.selectedTabElements.size > 1) {
+				multipleTabDragSupport(e);
+				return;
+			}
 			const editor = this.group.getEditorByIndex(index);
+
 			if (!editor) {
 				return;
 			}
 
 			this.editorTransfer.setData([new DraggedEditorIdentifier({ editor, groupId: this.group.id })], DraggedEditorIdentifier.prototype);
-
 			if (e.dataTransfer) {
 				e.dataTransfer.effectAllowed = 'copyMove';
 			}
@@ -691,7 +807,6 @@ export class TabsTitleControl extends TitleControl {
 		// Drop support
 		disposables.add(new DragAndDropObserver(tab, {
 			onDragEnter: e => {
-
 				// Update class to signal drag operation
 				addClass(tab, 'dragged-over');
 
@@ -743,6 +858,7 @@ export class TabsTitleControl extends TitleControl {
 				this.updateDropFeedback(tab, false, index);
 
 				this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
+				this.multiEditorTransfer.clearData(DraggedMultiEditorIdentifier.prototype);
 			},
 
 			onDrop: e => {
@@ -773,6 +889,10 @@ export class TabsTitleControl extends TitleControl {
 			return true; // (local) editors can always be dropped
 		}
 
+		if (this.multiEditorTransfer.hasData(DraggedMultiEditorIdentifier.prototype)) {
+			return true; // (local) editors can always be dropped
+		}
+
 		if (e.dataTransfer && e.dataTransfer.types.length > 0) {
 			return true; // optimistically allow external data (// see https://github.com/Microsoft/vscode/issues/25789)
 		}
@@ -786,7 +906,14 @@ export class TabsTitleControl extends TitleControl {
 		const isActiveTab = isTab && !!editor && this.group.isActive(editor);
 
 		// Background
-		const noDNDBackgroundColor = isTab ? this.getColor(isActiveTab ? TAB_ACTIVE_BACKGROUND : TAB_INACTIVE_BACKGROUND) : '';
+		let noDNDBackgroundColor = '';
+		if (isTab && index) {
+			if (this.selectedTabElements.has(index)) {
+				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_INACTIVE_SELECTED_BACKGROUND) || '';
+			} else {
+				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_BACKGROUND : TAB_INACTIVE_BACKGROUND) || '';
+			}
+		}
 		element.style.backgroundColor = (isDND ? this.getColor(EDITOR_DRAG_AND_DROP_BACKGROUND) : noDNDBackgroundColor) || '';
 
 		// Outline
@@ -950,7 +1077,7 @@ export class TabsTitleControl extends TitleControl {
 		}
 
 		// Active / dirty state
-		this.redrawEditorActiveAndDirty(this.accessor.activeGroup === this.group, editor, tabContainer, tabLabelWidget);
+		this.redrawEditorActiveSelectedAndDirty(this.accessor.activeGroup === this.group, editor, tabContainer, tabLabelWidget, index);
 	}
 
 	private redrawLabel(editor: IEditorInput, tabContainer: HTMLElement, tabLabelWidget: IResourceLabel, tabLabel: IEditorInputLabel): void {
@@ -974,12 +1101,14 @@ export class TabsTitleControl extends TitleControl {
 		}
 	}
 
-	private redrawEditorActiveAndDirty(isGroupActive: boolean, editor: IEditorInput, tabContainer: HTMLElement, tabLabelWidget: IResourceLabel): void {
+	private redrawEditorActiveSelectedAndDirty(isGroupActive: boolean, editor: IEditorInput, tabContainer: HTMLElement, tabLabelWidget: IResourceLabel, index: number): void {
 		const isTabActive = this.group.isActive(editor);
 
 		const hasModifiedBorderTop = this.doRedrawEditorDirty(isGroupActive, isTabActive, editor, tabContainer);
 
 		this.doRedrawEditorActive(isGroupActive, !hasModifiedBorderTop, editor, tabContainer, tabLabelWidget);
+
+		this.doRedrawEditorSelected(isGroupActive, isTabActive, editor, tabContainer, index);
 	}
 
 	private doRedrawEditorActive(isGroupActive: boolean, allowBorderTop: boolean, editor: IEditorInput, tabContainer: HTMLElement, tabLabelWidget: IResourceLabel): void {
@@ -1069,6 +1198,22 @@ export class TabsTitleControl extends TitleControl {
 		}
 
 		return hasModifiedBorderColor;
+	}
+
+	private doRedrawEditorSelected(isGroupActive: boolean, isTabActive: boolean, editor: IEditorInput, tabContainer: HTMLElement, index: number): void {
+		if (this.selectedTabElements.has(index)) {
+			addClass(tabContainer, 'selected');
+
+			if (isTabActive) {
+				tabContainer.style.background = this.getColor(isGroupActive ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND) || '';
+			} else {
+				tabContainer.style.background = this.getColor(TAB_INACTIVE_SELECTED_BACKGROUND) || '';
+			}
+
+			// TAB_ACTIVE_SELECTED_BACKGROUND, TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND, TAB_INACTIVE_SELECTED_BACKGROUND
+		} else {
+			removeClass(tabContainer, 'selected');
+		}
 	}
 
 	layout(dimension: Dimension | undefined): void {
@@ -1231,6 +1376,37 @@ export class TabsTitleControl extends TitleControl {
 			}
 		}
 
+		// multiple editor tabs
+		else if (this.multiEditorTransfer.hasData(DraggedMultiEditorIdentifier.prototype)) {
+			const data = this.multiEditorTransfer.getData(DraggedMultiEditorIdentifier.prototype);
+			if (Array.isArray(data)) {
+				const draggedEditors = data[0].identifier;
+				const sourceGroup = this.accessor.getGroup(draggedEditors.groupId);
+
+				if (sourceGroup) {
+
+					// Move editor to target position and index
+					if (this.isMoveOperation(e, draggedEditors.groupId)) {
+						for (let editor of draggedEditors.editors) {
+							sourceGroup.moveEditor(editor, this.group, { index: targetIndex });
+						}
+
+					}
+
+					// Copy editor to target position and index
+					else {
+						for (let editor of draggedEditors.editors) {
+							sourceGroup.copyEditor(editor, this.group, { index: targetIndex });
+						}
+
+					}
+				}
+
+				this.group.focus();
+				this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
+				this.multiEditorTransfer.clearData(DraggedMultiEditorIdentifier.prototype);
+			}
+		}
 		// External DND
 		else {
 			const dropHandler = this.instantiationService.createInstance(ResourcesDropHandler, { allowWorkspaceOpen: false /* open workspace file as file if dropped */ });
@@ -1428,5 +1604,7 @@ registerThemingParticipant((theme: IColorTheme, collector: ICssStyleCollector) =
 			}
 		`);
 		}
+
+		// TODO
 	}
 });

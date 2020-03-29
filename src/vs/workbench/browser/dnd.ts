@@ -19,7 +19,7 @@ import { MIME_BINARY } from 'vs/base/common/mime';
 import { isWindows, isWeb } from 'vs/base/common/platform';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { isCodeEditor } from 'vs/editor/browser/editorBrowser';
-import { IEditorIdentifier, GroupIdentifier } from 'vs/workbench/common/editor';
+import { IEditorIdentifier, GroupIdentifier, IMultiEditorIdentifier } from 'vs/workbench/common/editor';
 import { IEditorService, IResourceEditorInputType } from 'vs/workbench/services/editor/common/editorService';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { addDisposableListener, EventType, asDomUri } from 'vs/base/browser/dom';
@@ -40,6 +40,15 @@ export class DraggedEditorIdentifier {
 	constructor(private _identifier: IEditorIdentifier) { }
 
 	get identifier(): IEditorIdentifier {
+		return this._identifier;
+	}
+}
+
+export class DraggedMultiEditorIdentifier {
+
+	constructor(private _identifier: IMultiEditorIdentifier) { }
+
+	get identifier(): IMultiEditorIdentifier {
 		return this._identifier;
 	}
 }

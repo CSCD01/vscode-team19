@@ -49,6 +49,7 @@ export const InEditorZenModeContext = new RawContextKey<boolean>('inZenMode', fa
 export const IsCenteredLayoutContext = new RawContextKey<boolean>('isCenteredLayout', false);
 export const SplitEditorsVertically = new RawContextKey<boolean>('splitEditorsVertically', false);
 export const EditorAreaVisibleContext = new RawContextKey<boolean>('editorAreaVisible', true);
+export const MultipleEditorTabsSelectedContext = new RawContextKey<boolean>('multipleEditorTabs', false);
 
 /**
  * Text diff editor id.
@@ -1246,6 +1247,11 @@ export interface IEditorIdentifier {
 	editor: IEditorInput;
 }
 
+export interface IMultiEditorIdentifier {
+	groupId: GroupIdentifier;
+	editors: IEditorInput[];
+}
+
 /**
  * The editor commands context is used for editor commands (e.g. in the editor title)
  * and we must ensure that the context is serializable because it potentially travels
@@ -1254,6 +1260,7 @@ export interface IEditorIdentifier {
 export interface IEditorCommandsContext {
 	groupId: GroupIdentifier;
 	editorIndex?: number;
+	editorIndexes?: number[];
 }
 
 export class EditorCommandsContextActionRunner extends ActionRunner {
