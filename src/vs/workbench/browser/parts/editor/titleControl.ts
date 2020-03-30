@@ -296,6 +296,48 @@ export abstract class TitleControl extends Themable {
 		}));
 	}
 
+	protected testMultiContextMenu(editors: IEditorInput[], e: Event, node: HTMLElement): void {
+		// Update contexts based on editor picked and remember previous to restore
+		console.log('testing multi');
+		const currentResourceContext = this.resourceContext.get();
+		const currentPinnedContext = !!this.editorPinnedContext.get();
+		for (let editor of editors) {
+			this.resourceContext.set(withUndefinedAsNull(toResource(editor, { supportSideBySide: SideBySideEditor.MASTER })));
+			this.editorPinnedContext.set(this.group.isPinned(editor));
+		}
+
+		// Find target anchor
+		let anchor: HTMLElement | { x: number, y: number } = node;
+		if (e instanceof MouseEvent) {
+			const event = new StandardMouseEvent(e);
+			anchor = { x: event.posx, y: event.posy };
+		}
+
+		// Fill in contributed actions
+		const actions: IAction[] = [];
+		const actionsDisposable = createAndFillInContextMenuActions(this.contextMenu, { shouldForwardArgs: true, arg: this.resourceContext.get() }, actions, this.contextMenuService);
+		let actionContextList = editors.map((editor) => { return { groupId: this.group.id, editorIndex: this.group.getIndexOfEditor(editor) }; });
+		// Show it
+		this.contextMenuService.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => actions,
+			getActionsContext: () => actionContextList,
+			getKeyBinding: (action) => this.getKeybinding(action),
+			onHide: () => {
+
+				// restore previous contexts
+				this.resourceContext.set(currentResourceContext || null);
+				this.editorPinnedContext.set(currentPinnedContext);
+
+				// restore focus to active group
+				this.accessor.activeGroup.focus();
+
+				// Cleanup
+				dispose(actionsDisposable);
+			}
+		});
+	}
+
 	protected onContextMenu(editor: IEditorInput, e: Event, node: HTMLElement): void {
 
 		// Update contexts based on editor picked and remember previous to restore

@@ -410,7 +410,7 @@ export class TabsTitleControl extends TitleControl {
 
 		// Activity has an impact on each tab
 		this.forEachTab((editor, index, tabContainer, tabLabelWidget, tabLabel) => {
-			this.redrawEditorActiveSelectedAndDirty(isGroupActive, editor, tabContainer, tabLabelWidget);
+			this.redrawEditorActiveSelectedAndDirty(isGroupActive, editor, tabContainer, tabLabelWidget, index);
 		});
 
 		// Activity has an impact on the toolbar, so we need to update and layout
@@ -445,7 +445,7 @@ export class TabsTitleControl extends TitleControl {
 	}
 
 	updateEditorDirty(editor: IEditorInput): void {
-		this.withTab(editor, (editor, index, tabContainer, tabLabelWidget) => this.redrawEditorActiveSelectedAndDirty(this.accessor.activeGroup === this.group, editor, tabContainer, tabLabelWidget));
+		this.withTab(editor, (editor, index, tabContainer, tabLabelWidget) => this.redrawEditorActiveSelectedAndDirty(this.accessor.activeGroup === this.group, editor, tabContainer, tabLabelWidget, index));
 	}
 
 	updateOptions(oldOptions: IEditorPartOptions, newOptions: IEditorPartOptions): void {
@@ -553,7 +553,7 @@ export class TabsTitleControl extends TitleControl {
 			if (this.originatesFromTabActionBar(e)) {
 				return; // not when clicking on actions
 			}
-			console.log(e.ctrlKey);
+
 			// Open tabs editor
 			const input = this.group.getEditorByIndex(index);
 			if (input) {
@@ -564,7 +564,6 @@ export class TabsTitleControl extends TitleControl {
 			if (e.button === 0 && e.ctrlKey) {
 				if (this.selectedTabElements.has(index)) {
 					this.selectedTabElements.delete(index);
-					console.log(`Removed index: ${index}`);
 				} else {
 					this.selectedTabElements.set(index, tab);
 					console.log(`Added index: ${index}`);
@@ -578,7 +577,7 @@ export class TabsTitleControl extends TitleControl {
 
 		// clears the map for multiple tab support on mouse up
 		disposables.add(addDisposableListener(tab, EventType.MOUSE_UP, (e: MouseEvent) => {
-			if (!e.ctrlKey) {
+			if (!e.ctrlKey && e.button === 0) {
 				this.selectedTabElements.clear();
 				console.log('Cleared');
 				this.redraw();
@@ -587,10 +586,28 @@ export class TabsTitleControl extends TitleControl {
 
 		const showContextMenu = (e: Event) => {
 			EventHelper.stop(e);
+			if (this.selectedTabElements.size <= 1) {
+				console.log('aaa');
+				const input = this.group.getEditorByIndex(index);
+				if (input) {
+					this.onContextMenu(input, e, tab);
+				}
+			} else {
+				console.log('bbb');
+				const keys: number[] = Array.from(this.selectedTabElements.keys());
+				const sortedKeys = keys.sort((n1, n2) => n1 - n2);
+				let inputs: IEditorInput[] = [];
 
-			const input = this.group.getEditorByIndex(index);
-			if (input) {
-				this.onContextMenu(input, e, tab);
+				for (let i of sortedKeys) {
+					const input = this.group.getEditorByIndex(i);
+					if (input) {
+						inputs.push(input);
+					} else {
+						return;
+					}
+				}
+
+				this.testMultiContextMenu(inputs, e, tab);
 			}
 		};
 
@@ -697,9 +714,28 @@ export class TabsTitleControl extends TitleControl {
 		disposables.add(addDisposableListener(tab, EventType.CONTEXT_MENU, (e: Event) => {
 			EventHelper.stop(e, true);
 
-			const input = this.group.getEditorByIndex(index);
-			if (input) {
-				this.onContextMenu(input, e, tab);
+			if (this.selectedTabElements.size <= 1) {
+				console.log('aaa');
+				const input = this.group.getEditorByIndex(index);
+				if (input) {
+					this.onContextMenu(input, e, tab);
+				}
+			} else {
+				console.log('bbb');
+				const keys: number[] = Array.from(this.selectedTabElements.keys());
+				const sortedKeys = keys.sort((n1, n2) => n1 - n2);
+				let inputs: IEditorInput[] = [];
+
+				for (let i of sortedKeys) {
+					const input = this.group.getEditorByIndex(i);
+					if (input) {
+						inputs.push(input);
+					} else {
+						return;
+					}
+				}
+
+				this.testMultiContextMenu(inputs, e, tab);
 			}
 		}, true /* use capture to fix https://github.com/Microsoft/vscode/issues/19145 */));
 
@@ -869,7 +905,14 @@ export class TabsTitleControl extends TitleControl {
 		const isActiveTab = isTab && !!editor && this.group.isActive(editor);
 
 		// Background
-		const noDNDBackgroundColor = isTab ? this.getColor(isActiveTab ? TAB_ACTIVE_BACKGROUND : TAB_INACTIVE_BACKGROUND) : '';
+		let noDNDBackgroundColor = '';
+		if (isTab) {
+			if (this.selectedTabElements.has(index)[a]) {
+				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_INACTIVE_SELECTED_BACKGROUND);
+			} else {
+				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_BACKGROUND : TAB_INACTIVE_BACKGROUND);
+			}
+		}
 		element.style.backgroundColor = (isDND ? this.getColor(EDITOR_DRAG_AND_DROP_BACKGROUND) : noDNDBackgroundColor) || '';
 
 		// Outline
@@ -1157,37 +1200,19 @@ export class TabsTitleControl extends TitleControl {
 	}
 
 	private doRedrawEditorSelected(isGroupActive: boolean, isTabActive: boolean, editor: IEditorInput, tabContainer: HTMLElement, index: number): void {
-		console.log('Active: ' + isGroupActive);
-		if (isTabActive) {
-			if (this.selectedTabElements.has(index)) {
-				addClass(tabContainer, 'selected');
-				tabContainer.style.background = this.getColor(isGroupActive ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND);
+		if (this.selectedTabElements.has(index)) {
+			addClass(tabContainer, 'selected');
+
+			if (isTabActive) {
+				tabContainer.style.background = this.getColor(isGroupActive ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND) || '';
 			} else {
-				removeClass(tabContainer, 'selected');
+				tabContainer.style.background = this.getColor(TAB_INACTIVE_SELECTED_BACKGROUND) || '';
 			}
+
+			// TAB_ACTIVE_SELECTED_BACKGROUND, TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND, TAB_INACTIVE_SELECTED_BACKGROUND
 		} else {
-			if (this.selectedTabElements.has(index)) {
-				addClass(tabContainer, 'selected');
-				console.log(TAB_INACTIVE_SELECTED_BACKGROUND);
-				tabContainer.style.background = this.getColor(TAB_INACTIVE_SELECTED_BACKGROUND);
-			} else {
-				removeClass(tabContainer, 'selected');
-			}
+			removeClass(tabContainer, 'selected');
 		}
-
-		// if (this.selectedTabElements.has(index)) {
-		// 	addClass(tabContainer, 'selected');
-
-		// 	if (isTabActive) {
-		// 		tabContainer.style.background = this.getColor(isGroupActive ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND);
-		// 	} else {
-		// 		tabContainer.style.background = this.getColor(TAB_INACTIVE_SELECTED_BACKGROUND);
-		// 	}
-
-		// 	// TAB_ACTIVE_SELECTED_BACKGROUND, TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND, TAB_INACTIVE_SELECTED_BACKGROUND
-		// } else {
-		// 	removeClass(tabContainer, 'selected');
-		// }
 	}
 
 	layout(dimension: Dimension | undefined): void {

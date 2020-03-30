@@ -35,18 +35,16 @@ export const TAB_UNFOCUSED_ACTIVE_BACKGROUND = registerColor('tab.unfocusedActiv
 	hc: TAB_ACTIVE_BACKGROUND
 }, nls.localize('tabUnfocusedActiveBackground', "Active tab background color in an unfocused group. Tabs are the containers for editors in the editor area. Multiple tabs can be opened in one editor group. There can be multiple editor groups."));
 
-// Yellow
 export const TAB_ACTIVE_SELECTED_BACKGROUND = registerColor('tab.activeSelectedBackground', {
-	dark: '#ffff00',
-	light: '#ffff00',
-	hc: '#ffff00',
+	dark: TAB_ACTIVE_BACKGROUND,
+	light: TAB_ACTIVE_BACKGROUND,
+	hc: TAB_ACTIVE_BACKGROUND,
 }, nls.localize('tabActiveSelectedBackground', "Active selected tab background color. Tabs are the containers for editors in the editor area. Multiple tabs can be opened in one editor group. There can be multiple editor groups."));
 
-// Pink
 export const TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND = registerColor('tab.unfocusedActiveSelectedBackground', {
-	dark: '#ffc0cb',
-	light: '#ffc0cb',
-	hc: '#ffc0cb',
+	dark: TAB_ACTIVE_BACKGROUND,
+	light: TAB_ACTIVE_BACKGROUND,
+	hc: TAB_ACTIVE_BACKGROUND,
 }, nls.localize('tabUnfocusedActiveSelectedBackground', "Active selected tab background color in an unfocused group. Tabs are the containers for editors in the editor area. Multiple tabs can be opened in one editor group. There can be multiple editor groups."));
 
 export const TAB_INACTIVE_BACKGROUND = registerColor('tab.inactiveBackground', {
@@ -55,11 +53,10 @@ export const TAB_INACTIVE_BACKGROUND = registerColor('tab.inactiveBackground', {
 	hc: null
 }, nls.localize('tabInactiveBackground', "Inactive tab background color. Tabs are the containers for editors in the editor area. Multiple tabs can be opened in one editor group. There can be multiple editor groups."));
 
-// Red
 export const TAB_INACTIVE_SELECTED_BACKGROUND = registerColor('tab.inactiveSelectedBackground', {
-	dark: '#ff0000',
-	light: '#ff0000',
-	hc: '#ff0000',
+	dark: transparent(TAB_ACTIVE_BACKGROUND, 0.9),
+	light: transparent(TAB_ACTIVE_BACKGROUND, 0.9),
+	hc: transparent(TAB_ACTIVE_BACKGROUND, 0.9),
 }, nls.localize('tabInactiveSelectedBackground', "Inactive selected tab background color. Tabs are the containers for editors in the editor area. Multiple tabs can be opened in one editor group. There can be multiple editor groups."));
 
 export const TAB_HOVER_BACKGROUND = registerColor('tab.hoverBackground', {
@@ -215,8 +212,8 @@ export const EDITOR_GROUP_BORDER = registerColor('editorGroup.border', {
 }, nls.localize('editorGroupBorder', "Color to separate multiple editor groups from each other. Editor groups are the containers of editors."));
 
 export const EDITOR_DRAG_AND_DROP_BACKGROUND = registerColor('editorGroup.dropBackground', {
-	dark: Color.fromHex('#53595D').transparent(0.5),
-	light: Color.fromHex('#2677CB').transparent(0.18),
+	dark: '#008000',
+	light: '#008000',
 	hc: null
 }, nls.localize('editorDragAndDropBackground', "Background color when dragging editors around. The color should have transparency so that the editor contents can still shine through."));
 
