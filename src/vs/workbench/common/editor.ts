@@ -1259,6 +1259,7 @@ export interface IMultiEditorIdentifier {
 export interface IEditorCommandsContext {
 	groupId: GroupIdentifier;
 	editorIndex?: number;
+	editorIndexes?: number[];
 }
 
 export class EditorCommandsContextActionRunner extends ActionRunner {

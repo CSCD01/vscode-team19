@@ -558,6 +558,7 @@ export class TabsTitleControl extends TitleControl {
 			const input = this.group.getEditorByIndex(index);
 			if (input) {
 				this.group.openEditor(input);
+
 			}
 
 			// Select multiple tabs
@@ -568,7 +569,6 @@ export class TabsTitleControl extends TitleControl {
 					this.selectedTabElements.set(index, tab);
 					console.log(`Added index: ${index}`);
 				}
-
 				this.redraw();
 			}
 
@@ -579,7 +579,6 @@ export class TabsTitleControl extends TitleControl {
 		disposables.add(addDisposableListener(tab, EventType.MOUSE_UP, (e: MouseEvent) => {
 			if (!e.ctrlKey && e.button === 0) {
 				this.selectedTabElements.clear();
-				console.log('Cleared');
 				this.redraw();
 			}
 		}));
@@ -587,13 +586,11 @@ export class TabsTitleControl extends TitleControl {
 		const showContextMenu = (e: Event) => {
 			EventHelper.stop(e);
 			if (this.selectedTabElements.size <= 1) {
-				console.log('aaa');
 				const input = this.group.getEditorByIndex(index);
 				if (input) {
 					this.onContextMenu(input, e, tab);
 				}
 			} else {
-				console.log('bbb');
 				const keys: number[] = Array.from(this.selectedTabElements.keys());
 				const sortedKeys = keys.sort((n1, n2) => n1 - n2);
 				let inputs: IEditorInput[] = [];
@@ -714,14 +711,12 @@ export class TabsTitleControl extends TitleControl {
 		disposables.add(addDisposableListener(tab, EventType.CONTEXT_MENU, (e: Event) => {
 			EventHelper.stop(e, true);
 
-			if (this.selectedTabElements.size <= 1) {
-				console.log('aaa');
+			if (this.selectedTabElements.size <= 1 && !this.selectedTabElements.has(index)) {
 				const input = this.group.getEditorByIndex(index);
 				if (input) {
 					this.onContextMenu(input, e, tab);
 				}
 			} else {
-				console.log('bbb');
 				const keys: number[] = Array.from(this.selectedTabElements.keys());
 				const sortedKeys = keys.sort((n1, n2) => n1 - n2);
 				let inputs: IEditorInput[] = [];
@@ -736,6 +731,8 @@ export class TabsTitleControl extends TitleControl {
 				}
 
 				this.testMultiContextMenu(inputs, e, tab);
+				// clear the selected
+				this.selectedTabElements.clear();
 			}
 		}, true /* use capture to fix https://github.com/Microsoft/vscode/issues/19145 */));
 
@@ -906,11 +903,11 @@ export class TabsTitleControl extends TitleControl {
 
 		// Background
 		let noDNDBackgroundColor = '';
-		if (isTab) {
-			if (this.selectedTabElements.has(index)[a]) {
-				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_INACTIVE_SELECTED_BACKGROUND);
+		if (isTab && index) {
+			if (this.selectedTabElements.has(index)) {
+				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_SELECTED_BACKGROUND : TAB_INACTIVE_SELECTED_BACKGROUND) || '';
 			} else {
-				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_BACKGROUND : TAB_INACTIVE_BACKGROUND);
+				noDNDBackgroundColor = this.getColor(isActiveTab ? TAB_ACTIVE_BACKGROUND : TAB_INACTIVE_BACKGROUND) || '';
 			}
 		}
 		element.style.backgroundColor = (isDND ? this.getColor(EDITOR_DRAG_AND_DROP_BACKGROUND) : noDNDBackgroundColor) || '';

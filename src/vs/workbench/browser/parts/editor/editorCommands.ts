@@ -447,16 +447,24 @@ export function splitEditor(editorGroupService: IEditorGroupsService, direction:
 	const newGroup = editorGroupService.addGroup(sourceGroup, direction);
 
 	// Split editor (if it can be split)
-	let editorToCopy: IEditorInput | undefined;
+	let editorsToCopy: (IEditorInput | undefined)[] = [];
 	if (context && typeof context.editorIndex === 'number') {
-		editorToCopy = sourceGroup.getEditorByIndex(context.editorIndex);
+		editorsToCopy.push(sourceGroup.getEditorByIndex(context.editorIndex));
+	} else if (context && Array.isArray(context.editorIndexes) && sourceGroup) {
+		context.editorIndexes.forEach(editorIndex => {
+			if (typeof editorIndex === 'number') {
+				editorsToCopy.push(sourceGroup?.getEditorByIndex(editorIndex));
+			}
+		});
 	} else {
-		editorToCopy = types.withNullAsUndefined(sourceGroup.activeEditor);
+		editorsToCopy.push(types.withNullAsUndefined(sourceGroup.activeEditor));
 	}
 
-	if (editorToCopy && (editorToCopy as EditorInput).supportsSplitEditor()) {
-		sourceGroup.copyEditor(editorToCopy, newGroup);
-	}
+	editorsToCopy.forEach(editorToCopy => {
+		if (editorToCopy && (editorToCopy as EditorInput).supportsSplitEditor()) {
+			sourceGroup?.copyEditor(editorToCopy, newGroup);
+		}
+	});
 
 	// Focus
 	newGroup.focus();
@@ -532,7 +540,6 @@ function registerCloseEditorCommands() {
 		handler: (accessor, resourceOrContext: URI | IEditorCommandsContext, context?: IEditorCommandsContext) => {
 			const editorGroupService = accessor.get(IEditorGroupsService);
 			const contexts = getMultiSelectedEditorContexts(getCommandsContext(resourceOrContext, context), accessor.get(IListService), editorGroupService);
-
 			const activeGroup = editorGroupService.activeGroup;
 			if (contexts.length === 0 && activeGroup.activeEditor) {
 				contexts.push({ groupId: activeGroup.id, editorIndex: activeGroup.getIndexOfEditor(activeGroup.activeEditor) });  // active editor as fallback
@@ -585,7 +592,6 @@ function registerCloseEditorCommands() {
 		handler: (accessor, resourceOrContext: URI | IEditorCommandsContext, context?: IEditorCommandsContext) => {
 			const editorGroupService = accessor.get(IEditorGroupsService);
 			const contexts = getMultiSelectedEditorContexts(getCommandsContext(resourceOrContext, context), accessor.get(IListService), editorGroupService);
-
 			const activeGroup = editorGroupService.activeGroup;
 			if (contexts.length === 0 && activeGroup.activeEditor) {
 				contexts.push({ groupId: activeGroup.id, editorIndex: activeGroup.getIndexOfEditor(activeGroup.activeEditor) });  // active editor as fallback
@@ -596,11 +602,15 @@ function registerCloseEditorCommands() {
 			return Promise.all(groupIds.map(async groupId => {
 				const group = editorGroupService.getGroup(groupId);
 				if (group) {
-					const editors = contexts
+					const nested_editors = contexts
 						.filter(context => context.groupId === groupId)
-						.map(context => typeof context.editorIndex === 'number' ? group.getEditorByIndex(context.editorIndex) : group.activeEditor);
-					const editorsToClose = group.editors.filter(e => editors.indexOf(e) === -1);
+						.map(context => typeof context.editorIndex === 'number' ? group.getEditorByIndex(context.editorIndex) :
+							context.editorIndexes !== undefined ? context.editorIndexes.map(idx => group.getEditorByIndex(idx)) :
+								group.activeEditor);
+					// flatten this array
+					const editors = ([] as any[]).concat(...nested_editors);
 
+					const editorsToClose = group.editors.filter(e => editors.indexOf(e) === -1);
 					if (group.activeEditor) {
 						group.pinEditor(group.activeEditor);
 					}
@@ -619,13 +629,18 @@ function registerCloseEditorCommands() {
 		handler: async (accessor, resourceOrContext: URI | IEditorCommandsContext, context?: IEditorCommandsContext) => {
 			const editorGroupService = accessor.get(IEditorGroupsService);
 
-			const { group, editor } = resolveCommandsContext(editorGroupService, getCommandsContext(resourceOrContext, context));
-			if (group && editor) {
+			const { group, editor, editors } = resolveCommandsContext(editorGroupService, getCommandsContext(resourceOrContext, context));
+			if (group && (editor || editors)) {
+				let exceptEditor = editor;
 				if (group.activeEditor) {
 					group.pinEditor(group.activeEditor);
 				}
 
-				return group.closeEditors({ direction: CloseDirection.RIGHT, except: editor });
+				if (editors && editors.length > 0) {
+					exceptEditor = editors[editors.length - 1];
+				}
+
+				return group.closeEditors({ direction: CloseDirection.RIGHT, except: exceptEditor });
 			}
 		}
 	});
@@ -696,19 +711,27 @@ function getCommandsContext(resourceOrContext: URI | IEditorCommandsContext, con
 	return undefined;
 }
 
-function resolveCommandsContext(editorGroupService: IEditorGroupsService, context?: IEditorCommandsContext): { group: IEditorGroup, editor?: IEditorInput } {
+function resolveCommandsContext(editorGroupService: IEditorGroupsService, context?: IEditorCommandsContext): {
+	group: IEditorGroup, editor?: IEditorInput,
+	editors?: any[]
+} {
 
 	// Resolve from context
 	let group = context && typeof context.groupId === 'number' ? editorGroupService.getGroup(context.groupId) : undefined;
 	let editor = group && context && typeof context.editorIndex === 'number' ? types.withNullAsUndefined(group.getEditorByIndex(context.editorIndex)) : undefined;
-
+	let editors = group && context && context.editorIndexes !== undefined && context.editorIndexes.length > 0 ?
+		context.editorIndexes.map((idx) => group ? types.withNullAsUndefined(group.getEditorByIndex(idx)) : undefined) : undefined;
 	// Fallback to active group as needed
 	if (!group) {
 		group = editorGroupService.activeGroup;
 		editor = <EditorInput>group.activeEditor;
 	}
 
-	return { group, editor };
+	if (editors && editors.indexOf(undefined) !== -1) {
+		editors = undefined;
+	}
+
+	return { group, editor, editors };
 }
 
 export function getMultiSelectedEditorContexts(editorContext: IEditorCommandsContext | undefined, listService: IListService, editorGroupService: IEditorGroupsService): IEditorCommandsContext[] {

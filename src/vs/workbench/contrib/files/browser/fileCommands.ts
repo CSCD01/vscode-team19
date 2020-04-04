@@ -244,6 +244,27 @@ async function resourcesToClipboard(resources: URI[], relative: boolean, clipboa
 	}
 }
 
+function getResourcesForCopyPath(accessor: ServicesAccessor, resource: URI | object, context?: IEditorCommandsContext): Array<URI> {
+	const editorGroupsService = accessor.get(IEditorGroupsService);
+
+	// Selecting multiple tabs
+	if (context && typeof context.groupId === 'number' && Array.isArray(context.editorIndexes)) {
+		const sourceGroup: IEditorGroup | undefined = editorGroupsService.getGroup(context.groupId);
+		if (sourceGroup) {
+			let resources: Array<URI> = [];
+			context.editorIndexes.map(index => sourceGroup.getEditorByIndex(index)).forEach(editor => {
+				if (editor && editor.resource) {
+					resources.push(editor.resource);
+				}
+			});
+
+			return resources;
+		}
+	}
+
+	return getMultiSelectedResources(resource, accessor.get(IListService), accessor.get(IEditorService), accessor.get(IExplorerService));
+}
+
 KeybindingsRegistry.registerCommandAndKeybindingRule({
 	weight: KeybindingWeight.WorkbenchContrib,
 	when: EditorContextKeys.focus.toNegated(),
@@ -252,8 +273,8 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 		primary: KeyMod.Shift | KeyMod.Alt | KeyCode.KEY_C
 	},
 	id: COPY_PATH_COMMAND_ID,
-	handler: async (accessor, resource: URI | object) => {
-		const resources = getMultiSelectedResources(resource, accessor.get(IListService), accessor.get(IEditorService), accessor.get(IExplorerService));
+	handler: async (accessor, resource: URI | object, context?: IEditorCommandsContext) => {
+		const resources = getResourcesForCopyPath(accessor, resource, context);
 		await resourcesToClipboard(resources, false, accessor.get(IClipboardService), accessor.get(INotificationService), accessor.get(ILabelService));
 	}
 });
@@ -266,8 +287,8 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 		primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KEY_K, KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KEY_C)
 	},
 	id: COPY_RELATIVE_PATH_COMMAND_ID,
-	handler: async (accessor, resource: URI | object) => {
-		const resources = getMultiSelectedResources(resource, accessor.get(IListService), accessor.get(IEditorService), accessor.get(IExplorerService));
+	handler: async (accessor, resource: URI | object, context?: IEditorCommandsContext) => {
+		const resources = getResourcesForCopyPath(accessor, resource, context);
 		await resourcesToClipboard(resources, true, accessor.get(IClipboardService), accessor.get(INotificationService), accessor.get(ILabelService));
 	}
 });

@@ -38,6 +38,7 @@ export class ExecuteCommandAction extends Action {
 	}
 
 	run(): Promise<void> {
+		console.log('Execute command action', this.commandId);
 		return this.commandService.executeCommand(this.commandId, this.commandArgs);
 	}
 }

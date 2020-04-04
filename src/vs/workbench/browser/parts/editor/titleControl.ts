@@ -298,14 +298,12 @@ export abstract class TitleControl extends Themable {
 
 	protected testMultiContextMenu(editors: IEditorInput[], e: Event, node: HTMLElement): void {
 		// Update contexts based on editor picked and remember previous to restore
-		console.log('testing multi');
 		const currentResourceContext = this.resourceContext.get();
 		const currentPinnedContext = !!this.editorPinnedContext.get();
 		for (let editor of editors) {
 			this.resourceContext.set(withUndefinedAsNull(toResource(editor, { supportSideBySide: SideBySideEditor.MASTER })));
 			this.editorPinnedContext.set(this.group.isPinned(editor));
 		}
-
 		// Find target anchor
 		let anchor: HTMLElement | { x: number, y: number } = node;
 		if (e instanceof MouseEvent) {
@@ -316,12 +314,12 @@ export abstract class TitleControl extends Themable {
 		// Fill in contributed actions
 		const actions: IAction[] = [];
 		const actionsDisposable = createAndFillInContextMenuActions(this.contextMenu, { shouldForwardArgs: true, arg: this.resourceContext.get() }, actions, this.contextMenuService);
-		let actionContextList = editors.map((editor) => { return { groupId: this.group.id, editorIndex: this.group.getIndexOfEditor(editor) }; });
+		let actionContextList = editors.map((editor) => this.group.getIndexOfEditor(editor));
 		// Show it
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => anchor,
 			getActions: () => actions,
-			getActionsContext: () => actionContextList,
+			getActionsContext: () => ({ groupId: this.group.id, editorIndexes: actionContextList }),
 			getKeyBinding: (action) => this.getKeybinding(action),
 			onHide: () => {
 
@@ -356,7 +354,6 @@ export abstract class TitleControl extends Themable {
 		// Fill in contributed actions
 		const actions: IAction[] = [];
 		const actionsDisposable = createAndFillInContextMenuActions(this.contextMenu, { shouldForwardArgs: true, arg: this.resourceContext.get() }, actions, this.contextMenuService);
-
 		// Show it
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => anchor,
