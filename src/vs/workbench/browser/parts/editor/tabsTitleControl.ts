@@ -533,6 +533,10 @@ export class TabsTitleControl extends TitleControl {
 
 		this.tabDisposables.push(combinedDisposable(eventsDisposable, tabActionBar, tabActionRunner, editorLabel));
 
+		// clears multi select tabs
+		this.selectedTabElements.clear();
+		this.redraw();
+
 		return tabContainer;
 	}
 
@@ -567,7 +571,7 @@ export class TabsTitleControl extends TitleControl {
 					this.selectedTabElements.delete(index);
 				} else {
 					this.selectedTabElements.set(index, tab);
-					console.log(`Added index: ${index}`);
+					//console.log(`Added index: ${index}`);
 				}
 				this.redraw();
 			}
@@ -604,7 +608,7 @@ export class TabsTitleControl extends TitleControl {
 					}
 				}
 
-				this.testMultiContextMenu(inputs, e, tab);
+				this.onMultiContextMenu(inputs, e, tab);
 			}
 		};
 
@@ -730,7 +734,7 @@ export class TabsTitleControl extends TitleControl {
 					}
 				}
 
-				this.testMultiContextMenu(inputs, e, tab);
+				this.onMultiContextMenu(inputs, e, tab);
 				// clear the selected
 				this.selectedTabElements.clear();
 			}
@@ -738,19 +742,21 @@ export class TabsTitleControl extends TitleControl {
 
 		const multipleTabDragSupport = (e: DragEvent): void => {
 			const editors: IEditorInput[] = [];
-			this.selectedTabElements.forEach((element, currIndex) => {
+			const keys: number[] = Array.from(this.selectedTabElements.keys());
+			const sortedKeys = keys.sort((n1, n2) => n1 - n2);
+			sortedKeys.forEach((element, currIndex) => {
 				const editor = this.group.getEditorByIndex(currIndex);
 				if (!editor) {
 					return;
 				}
 				editors.push(editor);
 			});
+
 			this.multiEditorTransfer.setData([new DraggedMultiEditorIdentifier({ editors, groupId: this.group.id })], DraggedMultiEditorIdentifier.prototype);
 			if (e.dataTransfer) {
 				e.dataTransfer.effectAllowed = 'copyMove';
 			}
 
-			//TODO : GET THIS WORKING
 			// const resource = toResource(editors, { supportSideBySide: SideBySideEditor.MASTER });
 			// if (resource) {
 			// 	this.instantiationService.invokeFunction(fillResourceDataTransfers, [resource], e);
@@ -760,13 +766,12 @@ export class TabsTitleControl extends TitleControl {
 			// addClass(tab, 'dragged');
 			// scheduleAtNextAnimationFrame(() => removeClass(tab, 'dragged'));
 
-			// Drag Image
+			// Drag Image, same as drag group in titlecontrol
 			if (this.group.activeEditor) {
 				let label = this.group.activeEditor.getName();
 				if (this.accessor.partOptions.showTabs && this.group.count > 1) {
 					label = localize('draggedEditorGroup', "{0} (+{1})", label, this.selectedTabElements.size - 1);
 				}
-
 				applyDragImage(e, label, 'monaco-editor-group-drag-image');
 			}
 		};
@@ -857,7 +862,6 @@ export class TabsTitleControl extends TitleControl {
 			},
 
 			onDrop: e => {
-				console.log('dropped! tab');
 				removeClass(tab, 'dragged-over');
 				this.updateDropFeedback(tab, false, index);
 

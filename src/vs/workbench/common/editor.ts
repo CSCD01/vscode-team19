@@ -49,6 +49,7 @@ export const InEditorZenModeContext = new RawContextKey<boolean>('inZenMode', fa
 export const IsCenteredLayoutContext = new RawContextKey<boolean>('isCenteredLayout', false);
 export const SplitEditorsVertically = new RawContextKey<boolean>('splitEditorsVertically', false);
 export const EditorAreaVisibleContext = new RawContextKey<boolean>('editorAreaVisible', true);
+export const MultipleEditorTabsSelectedContext = new RawContextKey<boolean>('multipleEditorTabs', false);
 
 /**
  * Text diff editor id.

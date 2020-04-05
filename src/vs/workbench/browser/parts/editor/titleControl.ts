@@ -33,7 +33,7 @@ import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { BreadcrumbsConfig } from 'vs/workbench/browser/parts/editor/breadcrumbs';
 import { BreadcrumbsControl, IBreadcrumbsControlOptions } from 'vs/workbench/browser/parts/editor/breadcrumbsControl';
 import { EDITOR_TITLE_HEIGHT, IEditorGroupsAccessor, IEditorGroupView } from 'vs/workbench/browser/parts/editor/editor';
-import { EditorCommandsContextActionRunner, IEditorCommandsContext, IEditorInput, toResource, IEditorPartOptions, SideBySideEditor, EditorPinnedContext } from 'vs/workbench/common/editor';
+import { EditorCommandsContextActionRunner, IEditorCommandsContext, IEditorInput, toResource, IEditorPartOptions, SideBySideEditor, EditorPinnedContext, MultipleEditorTabsSelectedContext } from 'vs/workbench/common/editor';
 import { ResourceContextKey } from 'vs/workbench/common/resources';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
 import { AnchorAlignment } from 'vs/base/browser/ui/contextview/contextview';
@@ -61,6 +61,7 @@ export abstract class TitleControl extends Themable {
 
 	private resourceContext: ResourceContextKey;
 	private editorPinnedContext: IContextKey<boolean>;
+	private multiTabsSelectedContext: IContextKey<boolean>;
 
 	private readonly editorToolBarMenuDisposables = this._register(new DisposableStore());
 
@@ -87,6 +88,7 @@ export abstract class TitleControl extends Themable {
 
 		this.resourceContext = this._register(instantiationService.createInstance(ResourceContextKey));
 		this.editorPinnedContext = EditorPinnedContext.bindTo(contextKeyService);
+		this.multiTabsSelectedContext = MultipleEditorTabsSelectedContext.bindTo(contextKeyService);
 
 		this.contextMenu = this._register(this.menuService.createMenu(MenuId.EditorTitleContext, this.contextKeyService));
 
@@ -296,7 +298,7 @@ export abstract class TitleControl extends Themable {
 		}));
 	}
 
-	protected testMultiContextMenu(editors: IEditorInput[], e: Event, node: HTMLElement): void {
+	protected onMultiContextMenu(editors: IEditorInput[], e: Event, node: HTMLElement): void {
 		// Update contexts based on editor picked and remember previous to restore
 		const currentResourceContext = this.resourceContext.get();
 		const currentPinnedContext = !!this.editorPinnedContext.get();
@@ -304,12 +306,16 @@ export abstract class TitleControl extends Themable {
 			this.resourceContext.set(withUndefinedAsNull(toResource(editor, { supportSideBySide: SideBySideEditor.MASTER })));
 			this.editorPinnedContext.set(this.group.isPinned(editor));
 		}
+		console.log(this.resourceContext);
 		// Find target anchor
 		let anchor: HTMLElement | { x: number, y: number } = node;
 		if (e instanceof MouseEvent) {
 			const event = new StandardMouseEvent(e);
 			anchor = { x: event.posx, y: event.posy };
 		}
+
+		// set property
+		this.multiTabsSelectedContext.set(true);
 
 		// Fill in contributed actions
 		const actions: IAction[] = [];
@@ -350,7 +356,8 @@ export abstract class TitleControl extends Themable {
 			const event = new StandardMouseEvent(e);
 			anchor = { x: event.posx, y: event.posy };
 		}
-
+		// set property
+		this.multiTabsSelectedContext.set(false);
 		// Fill in contributed actions
 		const actions: IAction[] = [];
 		const actionsDisposable = createAndFillInContextMenuActions(this.contextMenu, { shouldForwardArgs: true, arg: this.resourceContext.get() }, actions, this.contextMenuService);

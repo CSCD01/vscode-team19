@@ -26,7 +26,7 @@ import { WorkspaceFolderCountContext } from 'vs/workbench/browser/contextkeys';
 import { IsWebContext } from 'vs/platform/contextkey/common/contextkeys';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { OpenFileFolderAction, OpenFileAction, OpenFolderAction, OpenWorkspaceAction } from 'vs/workbench/browser/actions/workspaceActions';
-import { ActiveEditorIsReadonlyContext, DirtyWorkingCopiesContext, ActiveEditorContext } from 'vs/workbench/common/editor';
+import { ActiveEditorIsReadonlyContext, DirtyWorkingCopiesContext, ActiveEditorContext, MultipleEditorTabsSelectedContext } from 'vs/workbench/common/editor';
 import { SidebarFocusContext } from 'vs/workbench/common/viewlet';
 import { ThemeIcon } from 'vs/platform/theme/common/themeService';
 
@@ -169,7 +169,7 @@ const copyRelativePathCommand = {
 // Editor Title Context Menu
 appendEditorTitleContextMenuItem(COPY_PATH_COMMAND_ID, copyPathCommand.title, ResourceContextKey.IsFileSystemResource, '1_cutcopypaste');
 appendEditorTitleContextMenuItem(COPY_RELATIVE_PATH_COMMAND_ID, copyRelativePathCommand.title, ResourceContextKey.IsFileSystemResource, '1_cutcopypaste');
-appendEditorTitleContextMenuItem(REVEAL_IN_EXPLORER_COMMAND_ID, nls.localize('revealInSideBar', "Reveal in Side Bar"), ResourceContextKey.IsFileSystemResource);
+appendEditorTitleContextMenuItem(REVEAL_IN_EXPLORER_COMMAND_ID, nls.localize('revealInSideBar', "Reveal in Side Bar"), ContextKeyExpr.and(ResourceContextKey.IsFileSystemResource, MultipleEditorTabsSelectedContext.toNegated()));
 
 export function appendEditorTitleContextMenuItem(id: string, title: string, when: ContextKeyExpression | undefined, group?: string): void {
 
