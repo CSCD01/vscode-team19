@@ -550,9 +550,17 @@ function registerCloseEditorCommands() {
 			return Promise.all(groupIds.map(async groupId => {
 				const group = editorGroupService.getGroup(groupId);
 				if (group) {
-					const editors = coalesce(contexts
+					// const editors = coalesce(contexts
+					// 	.filter(context => context.groupId === groupId)
+					// 	.map(context => typeof context.editorIndex === 'number' ? group.getEditorByIndex(context.editorIndex) : group.activeEditor));
+
+					const nested_editors = coalesce(contexts
 						.filter(context => context.groupId === groupId)
-						.map(context => typeof context.editorIndex === 'number' ? group.getEditorByIndex(context.editorIndex) : group.activeEditor));
+						.map(context => typeof context.editorIndex === 'number' ? group.getEditorByIndex(context.editorIndex) :
+							context.editorIndexes !== undefined ? context.editorIndexes.map(idx => group.getEditorByIndex(idx)) :
+								group.activeEditor));
+					// flatten this array
+					const editors = ([] as any[]).concat(...nested_editors);
 
 					return group.closeEditors(editors);
 				}
