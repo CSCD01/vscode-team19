@@ -355,7 +355,6 @@ export abstract class TitleControl extends Themable {
 			const event = new StandardMouseEvent(e);
 			anchor = { x: event.posx, y: event.posy };
 		}
-
 		this.multiTabsSelectedContext.set(false);
 		// Fill in contributed actions
 		const actions: IAction[] = [];

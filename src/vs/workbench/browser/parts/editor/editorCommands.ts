@@ -540,7 +540,6 @@ function registerCloseEditorCommands() {
 		handler: (accessor, resourceOrContext: URI | IEditorCommandsContext, context?: IEditorCommandsContext) => {
 			const editorGroupService = accessor.get(IEditorGroupsService);
 			const contexts = getMultiSelectedEditorContexts(getCommandsContext(resourceOrContext, context), accessor.get(IListService), editorGroupService);
-
 			const activeGroup = editorGroupService.activeGroup;
 			if (contexts.length === 0 && activeGroup.activeEditor) {
 				contexts.push({ groupId: activeGroup.id, editorIndex: activeGroup.getIndexOfEditor(activeGroup.activeEditor) });  // active editor as fallback
