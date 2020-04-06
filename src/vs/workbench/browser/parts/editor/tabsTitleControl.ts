@@ -1209,8 +1209,6 @@ export class TabsTitleControl extends TitleControl {
 			} else {
 				tabContainer.style.background = this.getColor(TAB_INACTIVE_SELECTED_BACKGROUND) || '';
 			}
-
-			// TAB_ACTIVE_SELECTED_BACKGROUND, TAB_UNFOCUSED_ACTIVE_SELECTED_BACKGROUND, TAB_INACTIVE_SELECTED_BACKGROUND
 		} else {
 			removeClass(tabContainer, 'selected');
 		}
