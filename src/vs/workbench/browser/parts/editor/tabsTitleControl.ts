@@ -744,7 +744,7 @@ export class TabsTitleControl extends TitleControl {
 			const editors: IEditorInput[] = [];
 			const keys: number[] = Array.from(this.selectedTabElements.keys());
 			const sortedKeys = keys.sort((n1, n2) => n1 - n2);
-			sortedKeys.forEach((element, currIndex) => {
+			sortedKeys.forEach((currIndex) => {
 				const editor = this.group.getEditorByIndex(currIndex);
 				if (!editor) {
 					return;
@@ -1386,6 +1386,7 @@ export class TabsTitleControl extends TitleControl {
 					// Move editor to target position and index
 					if (this.isMoveOperation(e, draggedEditors.groupId)) {
 						for (let editor of draggedEditors.editors) {
+
 							sourceGroup.moveEditor(editor, this.group, { index: targetIndex });
 						}
 
