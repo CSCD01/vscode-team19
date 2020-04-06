@@ -1400,6 +1400,7 @@ export class TabsTitleControl extends TitleControl {
 					}
 				}
 				this.selectedTabElements.clear();
+				this.redraw();
 				this.group.focus();
 				this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
 				this.multiEditorTransfer.clearData(DraggedMultiEditorIdentifier.prototype);
